@@ -277,7 +277,7 @@ formatted = format_for_download("Title", text)
 ## ⚙️ Configuration
 
 ### Available Groq Models
-- `mixtral-8x7b-32768` (Default) - Fast and powerful
+- `llama-3.1-8b-instant` (Default) - Supported low-latency model
 - `llama3-8b-8192` - Lightweight and fast
 - `gemma-7b-it` - Instruction-tuned
 

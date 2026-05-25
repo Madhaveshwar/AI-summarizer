@@ -15,11 +15,12 @@ load_dotenv()
 # ============================================================================
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 # Available Groq models
 AVAILABLE_MODELS = {
-    "mixtral": "mixtral-8x7b-32768",
+    # Supported Groq model for this project.
+    "llama3_1_8b_instant": "llama-3.1-8b-instant",
     "llama3": "llama3-8b-8192",
     "llama3_3_70b": "llama-3.3-70b-versatile",
     "gemma": "gemma-7b-it",

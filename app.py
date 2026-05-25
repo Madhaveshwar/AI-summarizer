@@ -5,13 +5,20 @@ Author: Your Name
 Created: 2024
 """
 
-import streamlit as st
 import os
 from io import BytesIO
-from groq import Groq
-from dotenv import load_dotenv
 
-# Import utility modules
+from dotenv import find_dotenv, load_dotenv
+
+# Load environment variables before any env-dependent imports or initialization.
+dotenv_path = find_dotenv(usecwd=True)
+load_dotenv(dotenv_path if dotenv_path else None, override=False)
+
+import streamlit as st
+from groq import Groq
+from langsmith import Client, traceable
+
+# Import utility modules after dotenv is loaded.
 from utils.summarizer import ContentSummarizer
 from utils.pdf_reader import extract_text_from_pdf, get_pdf_page_count
 from utils.web_scraper import scrape_url_content, is_valid_url
@@ -24,8 +31,40 @@ from utils.helpers import (
     get_tone_description,
 )
 
-# Load environment variables
-load_dotenv()
+# Normalize LangSmith tracing settings for LangChain-enabled tooling.
+LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+LANGCHAIN_TRACING_ENABLED = os.getenv("LANGCHAIN_TRACING_V2", "false").strip().lower() == "true"
+LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "AI_Content_Summarizer")
+
+print(f"LangSmith project: {LANGCHAIN_PROJECT}")
+print(f"LangSmith tracing enabled: {LANGCHAIN_TRACING_ENABLED}")
+print(f"LangSmith API key detected: {bool(LANGCHAIN_API_KEY)}")
+
+if LANGCHAIN_API_KEY:
+    os.environ.setdefault("LANGCHAIN_TRACING_V2", os.getenv("LANGCHAIN_TRACING_V2", "true"))
+    os.environ.setdefault("LANGCHAIN_PROJECT", LANGCHAIN_PROJECT)
+    try:
+        LANGSMITH_CLIENT = Client(api_key=LANGCHAIN_API_KEY)
+        print("LangSmith Connected")
+    except Exception as exc:
+        LANGSMITH_CLIENT = None
+        print(f"LangSmith client initialization failed: {exc}")
+else:
+    LANGSMITH_CLIENT = None
+    print("LangSmith API key missing")
+
+
+@traceable(name="LangSmith startup test", run_type="tool", client=LANGSMITH_CLIENT)
+def langsmith_test():
+    return "LangSmith tracing works"
+
+
+if LANGCHAIN_API_KEY and "langsmith_test_trace_sent" not in st.session_state:
+    try:
+        langsmith_test()
+    except Exception as exc:
+        print(f"LangSmith startup trace failed: {exc}")
+    st.session_state.langsmith_test_trace_sent = True
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -199,14 +238,22 @@ with st.sidebar:
     
     # API Status
     st.markdown("### 🔌 API Status")
-    try:
-        api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
-        if not api_key:
-            raise ValueError("GROQ_API_KEY not found in .env or Streamlit secrets")
+    if not os.getenv("GROQ_API_KEY"):
+        st.warning("GROQ_API_KEY is missing. Add it to your .env file before using the app.")
 
+    if not LANGCHAIN_API_KEY:
+        st.warning("LANGCHAIN_API_KEY is missing. LangSmith tracing will not send runs until it is set.")
+    elif not LANGCHAIN_TRACING_ENABLED:
+        st.warning("LANGCHAIN_TRACING_V2 is disabled. Set it to true to send traces to LangSmith.")
+    try:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY not found in environment variables or .env")
+
+        # Keep the health check on the supported Groq model.
         client = Groq(api_key=api_key)
         client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
             messages=[{"role": "user", "content": "Hello"}],
             max_tokens=5,
             temperature=0,
@@ -222,6 +269,17 @@ with st.sidebar:
             st.warning("Invalid or expired API key. Please check your GROQ_API_KEY in .env")
         elif "connection" in error_msg.lower() or "timeout" in error_msg.lower():
             st.warning("Connection issue. Check your internet and try again.")
+
+    langchain_api_key = os.getenv("LANGCHAIN_API_KEY")
+    langchain_tracing_enabled = os.getenv("LANGCHAIN_TRACING_V2", "false").strip().lower() == "true"
+    langchain_project = os.getenv("LANGCHAIN_PROJECT", "AI_Content_Summarizer")
+
+    if langchain_api_key and langchain_tracing_enabled:
+        st.success(f"✅ LangSmith tracing - Enabled ({langchain_project})")
+    elif langchain_api_key:
+        st.info(f"ℹ️ LangSmith API key detected for project '{langchain_project}'")
+    else:
+        st.warning("⚠️ LangSmith tracing is not configured. Add LANGCHAIN_API_KEY to your .env file.")
     
     st.markdown("---")
     

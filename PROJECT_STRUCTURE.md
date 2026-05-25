@@ -83,7 +83,7 @@ GROQ_API_KEY=your_api_key_here
 **`.env.example`** (Template File - PUBLIC)
 ```
 GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=mixtral-8x7b-32768
+GROQ_MODEL=llama-3.1-8b-instant
 ```
 - Shows users how to set up `.env`
 - Safe to commit to Git

@@ -6,9 +6,13 @@ This module handles all API calls to Groq for AI-powered summarization.
 import os
 from groq import Groq
 from dotenv import load_dotenv
+from langsmith import Client, traceable
 
 # Load environment variables from .env file
 load_dotenv()
+
+LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+LANGSMITH_CLIENT = Client(api_key=LANGCHAIN_API_KEY) if LANGCHAIN_API_KEY else None
 
 
 class ContentSummarizer:
@@ -34,12 +38,13 @@ class ContentSummarizer:
                 "Please add it to your .env file."
             )
         
-        # Get model from environment variables (default: llama-3.3-70b-versatile)
-        self.model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        # Use the supported Groq model for this project.
+        self.model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
         
         # Initialize Groq client
         self.client = Groq(api_key=api_key)
     
+    @traceable(name="Groq summary generation", run_type="chain", client=LANGSMITH_CLIENT)
     def generate_summary(
         self,
         text: str,
@@ -96,25 +101,34 @@ CONTENT TO SUMMARIZE:
 Please provide the summary now. Ensure it captures the main ideas and is appropriate for the specified tone."""
         
         try:
-            # Call Groq API using chat completions
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                # Set reasonable limits for response
-                max_tokens=1024,
-                temperature=0.7,  # Balance between creativity and consistency
-            )
-            
-            # Extract and return the summary
-            return completion.choices[0].message.content
+            trace_payload = self._generate_summary_trace(prompt)
+            return trace_payload["response"]
         
         except Exception as e:
             raise Exception(f"Error calling Groq API: {str(e)}")
+
+    @traceable(name="Groq API call", run_type="llm", client=LANGSMITH_CLIENT)
+    def _generate_summary_trace(self, prompt: str) -> dict:
+        # Keep the supported model visible in the trace metadata and payload.
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            # Set reasonable limits for response
+            max_tokens=1024,
+            temperature=0.7,  # Balance between creativity and consistency
+        )
+
+        response_text = completion.choices[0].message.content
+        return {
+            "prompt": prompt,
+            "response": response_text,
+            "model": self.model,
+        }
     
     def check_api_status(self) -> bool:
         """

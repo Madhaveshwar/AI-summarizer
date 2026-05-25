@@ -11,7 +11,7 @@ For users who want to customize and extend the application.
 **Change Groq Model:**
 ```python
 # In config.py or .env
-GROQ_MODEL = "llama3-8b-8192"  # Options: mixtral-8x7b-32768, llama3-8b-8192, gemma-7b-it
+GROQ_MODEL = "llama-3.1-8b-instant"  # Options: llama-3.1-8b-instant, llama3-8b-8192, gemma-7b-it
 ```
 
 **Adjust API Parameters:**
